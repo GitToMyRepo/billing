@@ -1,13 +1,29 @@
 package com.mywork.billing.domain;
 
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+@Getter
+@Setter
+@ToString(exclude = "invoices") // exclude to avoid lazy loading issues
 @Entity
 @Table(name = "customers")
 public class Customer {
@@ -33,7 +49,6 @@ public class Customer {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // One customer can have many invoices
     @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Invoice> invoices = new ArrayList<>();
 
@@ -48,7 +63,6 @@ public class Customer {
         updatedAt = LocalDateTime.now();
     }
 
-    // Constructors
     public Customer() {}
 
     public Customer(String name, String email, String phone) {
@@ -56,16 +70,4 @@ public class Customer {
         this.email = email;
         this.phone = phone;
     }
-
-    // Getters and setters
-    public Long getId() { return id; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
-    public String getPhone() { return phone; }
-    public void setPhone(String phone) { this.phone = phone; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public List<Invoice> getInvoices() { return invoices; }
 }
