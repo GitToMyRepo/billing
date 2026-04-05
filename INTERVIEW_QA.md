@@ -452,3 +452,19 @@ The general rule is — configure the threshold wherever the build tool lives, n
 | .NET | `.runsettings` file or test command arguments |
 
 The CI pipeline just runs the build command. If the build tool enforces the threshold and fails, the pipeline fails. The CI platform (GitLab, GitHub, Jenkins) doesn't need to know about coverage thresholds at all.
+
+---
+
+**Q: Why does `./mvnw: Permission denied` occur in CI on Linux when the project was created on Windows?**
+
+Windows doesn't track Unix file permissions, so when `mvnw` is committed from Windows, Git doesn't store the executable bit. When the Linux CI runner tries to execute it, it gets `Permission denied` (exit code 126).
+
+Fix — run this once and commit:
+```bash
+git update-index --chmod=+x mvnw
+git commit -m "fix: make mvnw executable for Linux CI runner"
+```
+
+This stores the executable permission in Git permanently. Every subsequent clone or checkout will have `mvnw` already marked as executable — you don't need to do it again.
+
+This issue doesn't occur when using WSL (Windows Subsystem for Linux) because WSL preserves Unix file permissions when committing, so `mvnw` gets committed with the executable bit already set.
