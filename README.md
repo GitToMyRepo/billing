@@ -153,3 +153,66 @@ GET http://localhost:8080/actuator/health
 
 ### RestAssured compatibility with Spring Boot 4
 `CustomerControllerRestAssuredTest` is disabled. `rest-assured:spring-mock-mvc` 5.4.0 is compiled against Spring Test 5/6 API. Spring Boot 4 uses Spring Framework 7 which changed `MockHttpServletRequestBuilder.header()`, causing a `NoSuchMethodError` at runtime. The test logic and DSL style are correct — this will work once RestAssured releases a Spring Boot 4 compatible version. In Spring Boot 2/3 projects it works without issues.
+
+## SonarCloud Setup
+
+SonarCloud provides code quality and coverage analysis. The free plan covers public repos and analyses the main branch.
+
+### First-time setup
+
+1. Go to [sonarcloud.io](https://sonarcloud.io) and sign in with GitHub
+   - If your account was created via GitLab, you need a separate GitHub-linked account
+   - Install the SonarCloud GitHub App via [github.com/marketplace/sonarcloud](https://github.com/marketplace/sonarcloud) (free/$0 plan)
+
+2. Create the project in SonarCloud:
+   - Click "+" → "Analyze new project"
+   - Select your organisation (e.g. `GitToMyRepo`)
+
+   ![Analyze projects - select organisation](docs/images/sonarcloud-analyze-projects.png)
+
+   - If the repo doesn't appear, click "create one manually"
+   - Set Display Name: `billing`, Project Key: `gittomyrepo_billing`, Visibility: Public
+   - Choose "With other CI tools" as the analysis method
+
+   ![Project onboarding - Maven configuration](docs/images/sonarcloud-project-onboarding.png)
+
+   - Copy the `SONAR_TOKEN` value shown on screen
+
+3. Add the token to GitHub:
+   - Go to your repo → Settings → Secrets and variables → Actions
+   - Add secret: Name = `SONAR_TOKEN`, Value = token from SonarCloud
+
+4. The `pom.xml` and `ci.yml` are already configured — push to main to trigger the first analysis
+
+   `pom.xml` — add Sonar properties and plugin:
+   ```xml
+   <properties>
+       <sonar.organization>gittomyrepo</sonar.organization>
+       <sonar.projectKey>gittomyrepo_billing</sonar.projectKey>
+       <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+   </properties>
+
+   <plugin>
+       <groupId>org.sonarsource.scanner.maven</groupId>
+       <artifactId>sonar-maven-plugin</artifactId>
+       <version>5.1.0.4751</version>
+   </plugin>
+   ```
+
+   `.github/workflows/ci.yml` — add Sonar analysis step after tests:
+   ```yaml
+   - name: Analyse with SonarCloud
+     env:
+       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+     run: ./mvnw verify sonar:sonar -Dsonar.projectKey=gittomyrepo_billing
+   ```
+
+### Viewing results
+
+- Go to [sonarcloud.io](https://sonarcloud.io) → your project → Overview
+- Results appear after the pipeline runs on main
+
+   ![SonarCloud PR summary](docs/images/sonarcloud-pr-summary.png)
+
+- Feature branch analysis requires the paid plan — free plan shows "Not analyzed" on PRs
+- In your work, SonarQube is self-hosted so all branches are analysed
