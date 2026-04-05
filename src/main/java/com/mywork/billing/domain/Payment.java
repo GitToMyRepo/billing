@@ -1,13 +1,28 @@
 package com.mywork.billing.domain;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+@Getter
+@Setter
+@ToString(exclude = "invoice") // exclude to avoid lazy loading issues
 @Entity
 @Table(name = "payments")
 public class Payment {
@@ -37,7 +52,6 @@ public class Payment {
         if (paidAt == null) paidAt = LocalDateTime.now();
     }
 
-    // Constructors
     public Payment() {}
 
     public Payment(Invoice invoice, BigDecimal amount, String paymentMethod) {
@@ -45,15 +59,4 @@ public class Payment {
         this.amount = amount;
         this.paymentMethod = paymentMethod;
     }
-
-    // Getters and setters
-    public Long getId() { return id; }
-    public Invoice getInvoice() { return invoice; }
-    public void setInvoice(Invoice invoice) { this.invoice = invoice; }
-    public BigDecimal getAmount() { return amount; }
-    public void setAmount(BigDecimal amount) { this.amount = amount; }
-    public String getPaymentMethod() { return paymentMethod; }
-    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
-    public LocalDateTime getPaidAt() { return paidAt; }
-    public void setPaidAt(LocalDateTime paidAt) { this.paidAt = paidAt; }
 }
