@@ -74,6 +74,28 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- MockMvc support for Spring Boot 4 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- H2 in-memory DB for controller unit tests (no Testcontainers needed when service is mocked) -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- RestAssured Spring MockMvc - RestAssured DSL without Groovy HTTP layer, compatible with Java 21 -->
+		<dependency>
+			<groupId>io.rest-assured</groupId>
+			<artifactId>spring-mock-mvc</artifactId>
+			<version>5.4.0</version>
+			<scope>test</scope>
+		</dependency>
+
 		<!-- Testcontainers for integration tests with real Postgres -->
 		<dependency>
 			<groupId>org.testcontainers</groupId>
