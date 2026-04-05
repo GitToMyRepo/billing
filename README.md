@@ -148,3 +148,8 @@ Build fails if line coverage drops below 80%.
 ```
 GET http://localhost:8080/actuator/health
 ```
+
+## Known Issues / Notes
+
+### RestAssured compatibility with Spring Boot 4
+`CustomerControllerRestAssuredTest` is disabled. `rest-assured:spring-mock-mvc` 5.4.0 is compiled against Spring Test 5/6 API. Spring Boot 4 uses Spring Framework 7 which changed `MockHttpServletRequestBuilder.header()`, causing a `NoSuchMethodError` at runtime. The test logic and DSL style are correct — this will work once RestAssured releases a Spring Boot 4 compatible version. In Spring Boot 2/3 projects it works without issues.

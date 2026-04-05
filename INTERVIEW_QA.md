@@ -158,3 +158,54 @@ Same concepts, different complexity:
 | Health check | `healthcheck` in compose | `livenessProbe` / `readinessProbe` |
 
 Docker Compose is lighter and better for local dev. Kubernetes is for production-grade orchestration.
+
+---
+
+## Testing Types
+
+**Q: What are the differences between unit, integration, functional, E2E, mutation and pen tests?**
+
+| Type | What it tests | Speed | Example |
+|------|--------------|-------|---------|
+| Unit | Single class/method in isolation, all dependencies mocked | Very fast | `CustomerServiceTest` with Mockito |
+| Integration | Multiple components working together with real dependencies | Medium | `BillingApplicationTests` with Testcontainers + real Postgres |
+| Functional / Acceptance | System behaviour against business/acceptance criteria | Medium-slow | QA testing a Jira ticket in QA environment |
+| End-to-End (E2E) | Full system flow across all services from user perspective | Slow | Create customer → create invoice → pay → verify status is PAID |
+| Mutation | Introduces bugs into code automatically and checks if tests catch them | Slow | PIT (Pitest) for Java |
+| Penetration (Pen) | Security testing — exploiting vulnerabilities like SQL injection, auth bypass | Varies | Done by security team or external firm |
+
+Testing pyramid — more unit tests, fewer E2E tests:
+```
+      /  E2E  \        ← few, slow, expensive
+     / Functional\
+    / Integration  \
+   /   Unit Tests    \ ← many, fast, cheap
+```
+
+---
+
+**Q: What type of testing does QA perform when they pick up a Jira ticket?**
+
+Functional testing (also called acceptance testing) — they verify the system behaves according to the acceptance criteria on the ticket. They don't care about code internals, just "does it do what it's supposed to do?"
+
+Depending on the stage and who is testing:
+- QA testing against acceptance criteria in QA environment → functional / acceptance testing
+- Business stakeholders validating in UAT environment → UAT (User Acceptance Testing)
+- Automated tests that mirror acceptance criteria → automated acceptance tests (Cucumber/BDD)
+
+Functional testing is predominantly manual in most teams, especially for complex business flows. However it can be automated using tools like Postman collections, RestAssured, Karate (API level) or Selenium/Playwright (UI level).
+
+---
+
+**Q: How are integration tests used in your CI/CD pipeline?**
+
+Integration tests run at two points in the pipeline:
+
+- Pre-merge (on PR) — prevents broken code getting into main, catches issues before they affect the team
+- Post-merge — verifies the merged result is still clean, catches any merge conflicts or environment-specific issues
+
+This gives two safety nets. Integration tests typically test the service against a real database (using Testcontainers) or downstream services in a test environment — verifying the actual wiring works, not just mocked behaviour.
+
+> "We have unit tests that run locally and in CI, and integration tests that run pre and post merge in the pipeline. The integration tests give us confidence that the service works correctly with its real dependencies before anything reaches QA."
+
+The modern approach is "shift left" — automate as much testing as possible earlier in the pipeline so QA can focus on exploratory testing rather than repetitive regression checks.

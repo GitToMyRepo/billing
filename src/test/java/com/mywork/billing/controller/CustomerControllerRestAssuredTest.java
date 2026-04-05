@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.mywork.billing.dto.CustomerRequest;
 import com.mywork.billing.dto.CustomerResponse;
 import com.mywork.billing.exception.DuplicateResourceException;
+import com.mywork.billing.exception.GlobalExceptionHandler;
 import com.mywork.billing.exception.ResourceNotFoundException;
 import com.mywork.billing.service.CustomerService;
 import io.restassured.module.mockmvc.RestAssuredMockMvc;
@@ -18,43 +19,47 @@ import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-// RestAssured spring-mock-mvc module - uses RestAssured's readable DSL with MockMvc under the hood.
-// NOTE: RestAssured 5.x is not yet fully compatible with Spring Boot 4 / Spring Framework 7.
-// This test class is kept as a reference for the RestAssured DSL style.
-// In Spring Boot 2/3 projects this works out of the box.
-// @Disabled until RestAssured releases a Spring Boot 4 compatible version.
-@org.junit.jupiter.api.Disabled("RestAssured 5.x not yet compatible with Spring Boot 4 / Spring Framework 7")
-@SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.jpa.hibernate.ddl-auto=none",
-        "spring.flyway.enabled=false"
-})
-@AutoConfigureMockMvc
+// Pure Mockito + RestAssured spring-mock-mvc DSL.
+// No Spring context, no database - same isolation as CustomerControllerTest
+// but using RestAssured's more readable given/when/then syntax.
+//
+// NOTE: rest-assured:spring-mock-mvc 5.4.0 is compiled against Spring Test 5/6 API.
+// Spring Boot 4 uses Spring Framework 7 which changed MockHttpServletRequestBuilder.header()
+// causing NoSuchMethodError at runtime. This will be fixed when RestAssured releases
+// a Spring Boot 4 compatible version. The test logic and DSL style are correct.
+// In Spring Boot 2/3 projects (e.g. your current job) this works without any issues.
+@org.junit.jupiter.api.Disabled("rest-assured:spring-mock-mvc not yet compatible with Spring Boot 4 / Spring Framework 7")
+@ExtendWith(MockitoExtension.class)
 class CustomerControllerRestAssuredTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockitoBean
+    @Mock
     private CustomerService customerService;
+
+    @InjectMocks
+    private CustomerController customerController;
 
     private CustomerResponse customerResponse;
     private CustomerRequest customerRequest;
 
     @BeforeEach
     void setUp() {
-        // Wire RestAssured to use MockMvc instead of real HTTP
-        RestAssuredMockMvc.mockMvc(mockMvc);
+        // Wire RestAssured to use MockMvc built from the controller directly
+        RestAssuredMockMvc.standaloneSetup(
+                MockMvcBuilders
+                        .standaloneSetup(customerController)
+                        .setControllerAdvice(new GlobalExceptionHandler())
+                        .build()
+        );
+
         customerRequest = new CustomerRequest("John Doe", "john@example.com", "07700900000");
         customerResponse = new CustomerResponse(1L, "John Doe", "john@example.com", "07700900000", LocalDateTime.now());
     }
