@@ -16,48 +16,50 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mywork.billing.dto.CustomerRequest;
 import com.mywork.billing.dto.CustomerResponse;
 import com.mywork.billing.exception.DuplicateResourceException;
+import com.mywork.billing.exception.GlobalExceptionHandler;
 import com.mywork.billing.exception.ResourceNotFoundException;
 import com.mywork.billing.service.CustomerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-// @MockitoBean on CustomerService means no real DB calls are made - no Testcontainers needed.
-// H2 in-memory DB satisfies the datasource requirement for context startup.
-// Flyway is disabled since H2 is not the target DB and we don't need schema here.
-@SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.jpa.hibernate.ddl-auto=none",
-        "spring.flyway.enabled=false"
-})
-@AutoConfigureMockMvc
+// Pure Mockito - no Spring context, no database, no H2 needed.
+// MockMvc is set up manually via standaloneSetup, wiring the controller and exception handler directly.
+// This is the fastest and most isolated way to test a controller.
+@ExtendWith(MockitoExtension.class)
 class CustomerControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    // Instantiate directly - Jackson may not be auto-configured in all test slices
-    private final ObjectMapper objectMapper = new ObjectMapper()
-            .findAndRegisterModules(); // registers JavaTimeModule for LocalDateTime etc.
-
-    @MockitoBean
+    @Mock
     private CustomerService customerService;
+
+    @InjectMocks
+    private CustomerController customerController;
+
+    private MockMvc mockMvc;
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     private CustomerResponse customerResponse;
     private CustomerRequest customerRequest;
 
     @BeforeEach
     void setUp() {
+        // standaloneSetup wires the controller with MockMvc without loading a Spring context.
+        // GlobalExceptionHandler is registered so @ControllerAdvice error handling is tested too.
+        mockMvc = MockMvcBuilders
+                .standaloneSetup(customerController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
         customerRequest = new CustomerRequest("John Doe", "john@example.com", "07700900000");
         customerResponse = new CustomerResponse(1L, "John Doe", "john@example.com", "07700900000", LocalDateTime.now());
     }
