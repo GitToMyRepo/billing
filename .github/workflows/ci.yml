@@ -27,6 +27,11 @@ jobs:
       - name: Run full build with integration tests and coverage check
         run: ./mvnw verify -pl .
 
+      - name: Analyse with SonarCloud
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./mvnw verify sonar:sonar -Dsonar.projectKey=gittomyrepo_billing
+
       - name: Upload JaCoCo coverage report
         uses: actions/upload-artifact@v4
         if: always()
