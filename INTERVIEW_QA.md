@@ -452,3 +452,72 @@ The general rule is — configure the threshold wherever the build tool lives, n
 | .NET | `.runsettings` file or test command arguments |
 
 The CI pipeline just runs the build command. If the build tool enforces the threshold and fails, the pipeline fails. The CI platform (GitLab, GitHub, Jenkins) doesn't need to know about coverage thresholds at all.
+
+---
+
+**Q: Why does `./mvnw: Permission denied` occur in CI on Linux when the project was created on Windows?**
+
+Windows doesn't track Unix file permissions, so when `mvnw` is committed from Windows, Git doesn't store the executable bit. When the Linux CI runner tries to execute it, it gets `Permission denied` (exit code 126).
+
+Fix — run this once and commit:
+```bash
+git update-index --chmod=+x mvnw
+git commit -m "fix: make mvnw executable for Linux CI runner"
+```
+
+This stores the executable permission in Git permanently. Every subsequent clone or checkout will have `mvnw` already marked as executable — you don't need to do it again.
+
+This issue doesn't occur when using WSL (Windows Subsystem for Linux) because WSL preserves Unix file permissions when committing, so `mvnw` gets committed with the executable bit already set.
+
+---
+
+## SonarCloud / SonarQube
+
+**Q: What is SonarQube / SonarCloud and what does it do?**
+
+SonarQube is a code quality and security platform. SonarCloud is the cloud-hosted version, free for public repos. It does much more than just coverage:
+
+- Code coverage (consumes JaCoCo reports)
+- Code smells and maintainability issues
+- Bug detection
+- Security vulnerability scanning
+- Duplicated code detection
+- Technical debt tracking
+- Quality gates — PR can't merge if quality gate fails
+
+In a typical pipeline, the Sonar scanner runs after tests and sends results to SonarCloud. You can then see everything in the SonarCloud dashboard without downloading anything — unlike JaCoCo which requires downloading the HTML artifact.
+
+---
+
+**Q: How is SonarCloud configured in this project?**
+
+Three parts:
+
+1. `pom.xml` — Sonar properties and the sonar-maven-plugin:
+```xml
+<properties>
+    <sonar.organization>gittomyrepo</sonar.organization>
+    <sonar.projectKey>gittomyrepo_billing</sonar.projectKey>
+    <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+</properties>
+```
+
+2. GitHub Actions secret — `SONAR_TOKEN` added to repo secrets (Settings → Secrets and variables → Actions)
+
+3. `ci.yml` — Sonar analysis step runs after tests:
+```yaml
+- name: Analyse with SonarCloud
+  env:
+    SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  run: ./mvnw verify sonar:sonar -Dsonar.projectKey=gittomyrepo_billing
+```
+
+The `SONAR_TOKEN` is an account-level token — the same token can be reused across multiple projects in the same SonarCloud organisation.
+
+---
+
+**Q: Why does SonarCloud show "Not analyzed" on feature branches?**
+
+The free plan only analyses the main branch. Feature branch analysis requires the paid plan. This is expected behaviour — once the PR is merged to main, the full analysis runs and results appear in the SonarCloud dashboard under Overview.
+
+In your work, SonarQube is self-hosted so all branches are analysed regardless of plan.
