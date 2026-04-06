@@ -483,3 +483,63 @@ livenessProbe:
   initialDelaySeconds: 60
   periodSeconds: 30
 ```
+
+---
+
+**Q: How do you deploy a Spring Boot app to Kubernetes (Docker Desktop)?**
+
+Prerequisites:
+- Docker Desktop with Kubernetes enabled (Settings → Kubernetes → Enable Kubernetes)
+- Docker image built locally
+
+Steps:
+```bash
+# 1. Build the JAR
+./mvnw package -DskipTests
+
+# 2. Build the Docker image (imagePullPolicy: Never uses local image)
+docker build -t billing-api:latest .
+
+# 3. Apply manifests in order - secret first, then dependencies, then app
+kubectl apply -f k8s/billing-secret.yml
+kubectl apply -f k8s/postgres-deployment.yml
+kubectl apply -f k8s/billing-api-deployment.yml
+
+# 4. Check pods are running
+kubectl get pods
+
+# 5. Check logs if pod is not starting
+kubectl logs -f deployment/billing-api
+```
+
+Expected output when healthy:
+```
+NAME                                READY   STATUS    RESTARTS   AGE
+billing-api-865484f786-8tttd        1/1     Running   1          107s
+billing-postgres-5c4475bbfc-xpz2q   1/1     Running   0          107s
+```
+
+Access the app at `http://localhost:30080` (NodePort 30080 defined in the Service manifest).
+
+The `billing-api` pod may restart once on first start — this is normal if it starts before Postgres is fully ready. Kubernetes automatically restarts it and it comes up healthy on the second attempt. In production you'd use an init container or retry logic to handle this more gracefully.
+
+**Q: What is `imagePullPolicy: Never` in the Kubernetes deployment?**
+
+By default Kubernetes tries to pull images from a registry (Docker Hub, ECR etc.). `imagePullPolicy: Never` tells Kubernetes to only use locally available images — required when using images built on your local machine with Docker Desktop.
+
+In production this would be `imagePullPolicy: Always` or `IfNotPresent`, pulling from a real registry like ECR or Docker Hub.
+
+**Q: What is a NodePort service?**
+
+A `NodePort` service exposes the application on a static port on every node in the cluster. With Docker Desktop's single-node cluster, this means the app is accessible on `localhost:<nodePort>`.
+
+```yaml
+spec:
+  type: NodePort
+  ports:
+    - port: 8080        # internal cluster port
+      targetPort: 8080  # container port
+      nodePort: 30080   # external port on the node (localhost:30080)
+```
+
+In production you'd use a `LoadBalancer` service (cloud provider creates a load balancer) or an `Ingress` controller for HTTP routing.
