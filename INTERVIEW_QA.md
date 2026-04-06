@@ -3,6 +3,7 @@
 A running log of technical questions and answers covered during interview preparation.
 For skills and experience talking points, see [SKILLS_AND_EXPERIENCE.md](SKILLS_AND_EXPERIENCE.md).
 For Core Java questions, see [JAVA_QA.md](JAVA_QA.md).
+For Spring & Spring Boot questions, see [SPRING_QA.md](SPRING_QA.md).
 
 ---
 
