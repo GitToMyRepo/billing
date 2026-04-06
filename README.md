@@ -216,3 +216,12 @@ SonarCloud provides code quality and coverage analysis. The free plan covers pub
 
 - Feature branch analysis requires the paid plan — free plan shows "Not analyzed" on PRs
 - In your work, SonarQube is self-hosted so all branches are analysed
+
+## Branch Protection
+
+The `main` branch is protected with the following rules:
+- All changes must go through a pull request — no direct pushes
+- CI pipeline (`Build, Test & Coverage`) must pass before merging
+- Rules apply to everyone including admins
+
+To contribute: create a feature branch → push → raise PR → pipeline must be green → merge.

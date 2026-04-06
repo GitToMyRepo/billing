@@ -521,3 +521,72 @@ The `SONAR_TOKEN` is an account-level token — the same token can be reused acr
 The free plan only analyses the main branch. Feature branch analysis requires the paid plan. This is expected behaviour — once the PR is merged to main, the full analysis runs and results appear in the SonarCloud dashboard under Overview.
 
 In your work, SonarQube is self-hosted so all branches are analysed regardless of plan.
+
+---
+
+**Q: What is regression testing?**
+
+Regression testing verifies that existing functionality still works after a change. The name comes from "regression" — making sure nothing has gone backwards.
+
+After fixing a bug or adding a feature, regression tests check you haven't accidentally broken something that was working before.
+
+Two approaches:
+- Manual regression — QA works through a documented test plan, ticking off each test case. Time-consuming but thorough.
+- Automated regression — unit tests, integration tests, and functional tests run automatically in the pipeline on every push. Faster and catches issues immediately.
+
+In this project, the 18 tests running in the pipeline on every push form the automated regression suite.
+
+QA teams typically maintain a regression test plan — a documented set of test cases with ID, description, steps, expected result, and pass/fail status. In mature teams this evolves into automated test suites (Selenium, API tests, Cucumber) that run in the pipeline, freeing QA to focus on exploratory testing.
+
+---
+
+**Q: What is the difference between regression, sanity, and smoke testing?**
+
+| Type | Scope | Speed | Purpose |
+|------|-------|-------|---------|
+| Smoke test | Critical paths only | Very fast | Is the system alive and basic functions work? |
+| Sanity test | Specific fix or feature | Fast | Does this specific change work before testing further? |
+| Regression test | All existing functionality | Slow | Has anything broken after the change? |
+
+Typical order after a deployment:
+```
+Deploy → Smoke test (is it up?) → Sanity test (does the fix work?) → Regression suite (is everything else still working?)
+```
+
+In your pipeline:
+- Unit tests running in 3 seconds ≈ sanity check
+- Full `./mvnw verify` with integration tests ≈ regression suite
+
+Smoke test and sanity test are often used interchangeably in practice, though technically sanity is more focused on a specific change while smoke is about basic system health.
+
+---
+
+## Branch Protection & Code Review
+
+**Q: What are branch protection rules and why are they important?**
+
+Branch protection rules enforce quality gates on important branches (typically `main`). They prevent accidental or unreviewed changes reaching production.
+
+In this project, `main` is protected with:
+- Require a pull request before merging — no direct pushes to main, all changes must go through a PR
+- Require status checks to pass — the CI pipeline (`Build, Test & Coverage`) must be green before merging
+- Do not allow bypassing — rules apply to everyone including admins
+
+This mirrors real-world team practices where:
+- Developers work on feature branches
+- Raise a PR when ready
+- CI pipeline runs automatically on the PR
+- A reviewer approves the PR
+- Only then can it be merged to main
+
+**Q: How do you set up branch protection rules in GitHub?**
+
+Go to: repo → Settings → Branches → Add branch protection rule
+
+1. Set branch name pattern to `main`
+2. Tick "Require a pull request before merging"
+3. Tick "Require status checks to pass before merging" → search for and select your CI job name
+4. Optionally tick "Do not allow bypassing the above settings"
+5. Click Create
+
+In GitLab the equivalent is "Protected Branches" under Settings → Repository → Protected branches, where you can set merge and push access levels.
