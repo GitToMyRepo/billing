@@ -225,3 +225,58 @@ The `main` branch is protected with the following rules:
 - Rules apply to everyone including admins
 
 To contribute: create a feature branch → push → raise PR → pipeline must be green → merge.
+
+## Deploying to Docker Desktop Kubernetes
+
+Docker Desktop includes a built-in single-node Kubernetes cluster. Enable it in Docker Desktop → Settings → Kubernetes → Enable Kubernetes.
+
+This mirrors deploying to Minikube at work.
+
+### Build the Docker image
+
+```bash
+./mvnw package -DskipTests
+docker build -t billing-api:latest .
+```
+
+### Deploy to Kubernetes
+
+```bash
+# Apply in order - secret first, then postgres, then the app
+kubectl apply -f k8s/billing-secret.yml
+kubectl apply -f k8s/postgres-deployment.yml
+kubectl apply -f k8s/billing-api-deployment.yml
+```
+
+### Verify deployment
+
+```bash
+kubectl get pods
+kubectl get services
+kubectl logs -f deployment/billing-api
+```
+
+### Access the app
+
+```
+http://localhost:30080/actuator/health
+http://localhost:30080/api/customers
+```
+
+### Teardown
+
+```bash
+kubectl delete -f k8s/
+```
+
+### Kubernetes vs Docker Compose
+
+| | Docker Compose | Kubernetes (Docker Desktop) |
+|---|---|---|
+| Start | `docker-compose up` | `kubectl apply -f k8s/` |
+| Stop | `docker-compose down` | `kubectl delete -f k8s/` |
+| Logs | `docker-compose logs` | `kubectl logs deployment/billing-api` |
+| Scale | `docker-compose scale` | `kubectl scale deployment billing-api --replicas=3` |
+| Config | env vars in compose file | ConfigMap / Secret |
+| Persistence | Docker volume | PersistentVolumeClaim |
+| Health check | `healthcheck` in compose | `livenessProbe` / `readinessProbe` |

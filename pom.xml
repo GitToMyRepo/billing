@@ -48,6 +48,12 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Jackson Java 8 date/time support -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-jsr310</artifactId>
+		</dependency>
+
 		<!-- Validation -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -154,10 +160,11 @@
 						</goals>
 						<configuration>
 							<excludes>
-								<!-- Exclude domain entities, DTOs, exceptions - no business logic to test -->
+								<!-- Exclude domain entities, DTOs, exceptions, config - no business logic to test -->
 								<exclude>com/mywork/billing/domain/*</exclude>
 								<exclude>com/mywork/billing/dto/*</exclude>
 								<exclude>com/mywork/billing/exception/*</exclude>
+								<exclude>com/mywork/billing/config/*</exclude>
 								<exclude>com/mywork/billing/BillingApplication</exclude>
 							</excludes>
 							<rules>
