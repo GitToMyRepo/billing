@@ -590,3 +590,87 @@ Go to: repo → Settings → Branches → Add branch protection rule
 5. Click Create
 
 In GitLab the equivalent is "Protected Branches" under Settings → Repository → Protected branches, where you can set merge and push access levels.
+
+---
+
+**Q: Can you approve your own PR in GitHub?**
+
+No — GitHub does not allow the PR author to approve their own code by default. This enforces the four-eyes principle (two-person rule) — a second person must review before merging.
+
+On a solo project where there is only one contributor, the approval requirement can be removed from the branch protection rule, keeping only the CI pipeline check as the quality gate. In a team, a colleague would approve the PR.
+
+In GitLab the equivalent setting is under Settings → Repository → Protected branches → Merge access levels.
+
+---
+
+**Q: How do you automatically delete feature branches after a PR is merged?**
+
+In GitHub: repo → Settings → General → Pull Requests section → tick "Automatically delete head branches"
+
+After enabling this, every merged PR automatically deletes the remote feature branch. You still need to delete the local branch manually:
+```bash
+git branch -d feature/my-branch
+```
+
+This is standard practice in most teams — keeping merged branches around creates noise and confusion. Branch early, merge often, delete after merge.
+
+---
+
+**Q: What is the difference between the unit tests and integration tests in this project?**
+
+| | Unit Tests | Integration Tests |
+|---|---|---|
+| Classes | `CustomerServiceTest`, `CustomerControllerTest` | `CustomerIntegrationTest` |
+| Dependencies | All mocked with Mockito | Real Postgres via Testcontainers |
+| Speed | ~1-3 seconds | ~18-20 seconds |
+| What they test | Business logic and HTTP layer in isolation | Full stack — HTTP → controller → service → real DB |
+| DB assertions | None — no real DB | Directly assert DB state via repository |
+
+The integration tests verify things unit tests can't — that data is actually persisted, that queries work correctly against a real database, and that the full request/response cycle works end to end.
+
+Key pattern in `CustomerIntegrationTest`:
+- `@BeforeEach` calls `customerRepository.deleteAll()` to ensure test isolation — each test starts with a clean database
+- Tests create data via the API, then assert the database state directly via the repository
+- No mocks — every layer is exercised
+
+---
+
+## Correlation ID / Request Tracing
+
+**Q: What is a correlation ID and why is it important in microservices?**
+
+A correlation ID is a unique identifier (typically a UUID) assigned to each incoming request. It flows through every service involved in handling that request, appearing in all log lines so you can trace the full journey of a single request across multiple services.
+
+Without correlation IDs, debugging a production issue in a microservices system means searching through logs from multiple services with no way to connect them. With correlation IDs, you filter by one ID in Grafana and see the complete picture.
+
+**Q: How is correlation ID implemented in this project?**
+
+A servlet filter (`CorrelationIdFilter`) intercepts every request:
+
+1. If the request has an `X-Correlation-ID` header (passed from an upstream service), reuse it
+2. If not, generate a new UUID
+3. Put it in MDC (Mapped Diagnostic Context) — SLF4J automatically includes it in every log line for that request
+4. Add it to the response header so the caller can reference it
+5. Clean up MDC in a `finally` block to prevent memory leaks in thread pool environments
+
+```java
+MDC.put("correlationId", correlationId);
+try {
+    filterChain.doFilter(request, response);
+} finally {
+    MDC.remove("correlationId");  // always clean up
+}
+```
+
+The log pattern in `application.properties` includes the MDC value:
+```
+logging.pattern.console=... [%X{correlationId:-no-correlation-id}] ...
+```
+
+`%X{correlationId}` reads from MDC. The `:-no-correlation-id` is a default value if MDC is empty.
+
+**Q: What is MDC (Mapped Diagnostic Context)?**
+
+MDC is a thread-local map provided by SLF4J that lets you attach contextual information to log statements without passing it explicitly to every method. Values put in MDC are automatically included in log output via the pattern configuration.
+
+It's thread-local — each request thread has its own MDC map, so correlation IDs from different requests don't interfere with each other. This is why you must clean up MDC in a `finally` block — in a thread pool, threads are reused and stale MDC values from a previous request would leak into the next one.
