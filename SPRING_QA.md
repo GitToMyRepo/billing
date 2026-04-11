@@ -568,3 +568,74 @@ The `GlobalExceptionHandler` does two things:
 Without it, your API would return `500` for most business errors and the error format would be Spring's default which is harder for API consumers to work with.
 
 > "Spring handles some HTTP errors automatically like 404 for unknown routes and 405 for wrong methods. But for business logic errors like resource not found or duplicate data, we use `@ControllerAdvice` to map our custom exceptions to the appropriate HTTP status codes and return a consistent error response format."
+
+---
+
+## Circuit Breaker & Resilience
+
+**Q: What is a Circuit Breaker and why is it important in a billing system?**
+
+A Circuit Breaker protects your service when a downstream dependency (external API, another microservice) is failing or slow. Instead of letting every request hang and timeout, it "trips" after a threshold of failures and immediately returns a fallback response — giving the downstream service time to recover.
+
+Three states:
+```
+CLOSED → normal operation, requests pass through
+   ↓ (failure rate exceeds threshold)
+OPEN → circuit tripped, requests immediately return fallback (no real calls made)
+   ↓ (after wait duration)
+HALF-OPEN → allows a few test requests through to check if service recovered
+   ↓ (if successful)          ↓ (if still failing)
+CLOSED (recovered)          OPEN (back to waiting)
+```
+
+In a billing system:
+- Billing service calls **payment gateway** (Stripe, PayPal) — if gateway is down, circuit breaker trips and returns "payment service unavailable" instead of timing out every request
+- Billing service calls **notification service** — if it's down, circuit breaker trips and queues the notification for later
+- Billing service calls **customer profile service** — if it's slow, circuit breaker prevents cascading slowness across the system
+
+---
+
+**Q: How is Circuit Breaker implemented in this project?**
+
+Using Resilience4j with `@CircuitBreaker` and `@Retry` annotations on `PaymentGatewayService`:
+
+```java
+@CircuitBreaker(name = "paymentGateway", fallbackMethod = "fallbackProcessPayment")
+@Retry(name = "paymentGateway")
+public PaymentResult processPayment(Long invoiceId, BigDecimal amount, String paymentMethod) {
+    // calls external payment gateway
+    // if this fails, @Retry retries up to 3 times
+    // if all retries fail, @CircuitBreaker calls the fallback
+}
+
+// Fallback - called when circuit is OPEN or all retries exhausted
+public PaymentResult fallbackProcessPayment(Long invoiceId, BigDecimal amount,
+                                             String paymentMethod, Throwable ex) {
+    log.warn("Payment gateway unavailable. Returning fallback.");
+    return new PaymentResult(false, "Payment gateway temporarily unavailable", null);
+}
+```
+
+Configuration in `application.properties`:
+```properties
+# Circuit breaker trips after 50% failure rate over last 10 calls
+resilience4j.circuitbreaker.instances.paymentGateway.sliding-window-size=10
+resilience4j.circuitbreaker.instances.paymentGateway.failure-rate-threshold=50
+resilience4j.circuitbreaker.instances.paymentGateway.wait-duration-in-open-state=10s
+
+# Retry up to 3 times with 500ms between attempts
+resilience4j.retry.instances.paymentGateway.max-attempts=3
+resilience4j.retry.instances.paymentGateway.wait-duration=500ms
+```
+
+---
+
+**Q: What is the difference between Circuit Breaker and Retry?**
+
+| | Retry | Circuit Breaker |
+|---|---|---|
+| Purpose | Retry a failed call a few times | Stop calling a failing service entirely |
+| When to use | Transient failures (network blip) | Persistent failures (service is down) |
+| Risk | Can make things worse if service is overloaded | Prevents cascading failures |
+
+They work together — Retry handles occasional blips, Circuit Breaker handles sustained outages. In this project `@Retry` retries 3 times, then if all fail `@CircuitBreaker` trips and calls the fallback directly on subsequent requests.
