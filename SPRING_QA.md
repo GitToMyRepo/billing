@@ -543,3 +543,28 @@ spec:
 ```
 
 In production you'd use a `LoadBalancer` service (cloud provider creates a load balancer) or an `Ingress` controller for HTTP routing.
+
+---
+
+**Q: Does Spring automatically generate HTTP response codes, or do you need to control them yourself?**
+
+Both — it depends on the type of error:
+
+**Spring generates automatically:**
+- `404` — when no handler mapping matches the URL (e.g. `/api/nonexistent`)
+- `405` — when the HTTP method isn't supported on an endpoint
+- `400` — for malformed JSON, but with Spring's default generic error body
+
+**Controlled by `@ControllerAdvice` / `GlobalExceptionHandler`:**
+- `404` when a customer isn't found — Spring doesn't know about your business logic. Without the handler, `ResourceNotFoundException` would cause a `500`
+- `409` for duplicate email — Spring has no idea this should be a conflict
+- `400` for validation failures — Spring generates the 400 but the response body would be Spring's default format, not your custom `ErrorResponse`
+- `400` for malformed JSON — override Spring's default to return your consistent error format
+
+The `GlobalExceptionHandler` does two things:
+1. Maps business exceptions to the correct HTTP status codes
+2. Controls the response body format so all errors look consistent
+
+Without it, your API would return `500` for most business errors and the error format would be Spring's default which is harder for API consumers to work with.
+
+> "Spring handles some HTTP errors automatically like 404 for unknown routes and 405 for wrong methods. But for business logic errors like resource not found or duplicate data, we use `@ControllerAdvice` to map our custom exceptions to the appropriate HTTP status codes and return a consistent error response format."

@@ -16,8 +16,8 @@ spec:
     spec:
       containers:
         - name: billing-api
-          image: billing-api:latest
-          imagePullPolicy: Never  # use local image built by Docker Desktop
+          image: localhost:5000/billing-api:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
