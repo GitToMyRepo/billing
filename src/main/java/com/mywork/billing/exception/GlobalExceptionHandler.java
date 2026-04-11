@@ -34,6 +34,16 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(HttpStatus.CONFLICT.value(), ex.getMessage()));
     }
 
+    // 400 - malformed JSON or unreadable request body
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(
+            org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        log.warn("Malformed request body: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "Malformed JSON request body"));
+    }
+
     // 400 - validation failures from @Valid
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex) {
