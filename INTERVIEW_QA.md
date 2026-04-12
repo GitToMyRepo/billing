@@ -676,3 +676,165 @@ logging.pattern.console=... [%X{correlationId:-no-correlation-id}] ...
 MDC is a thread-local map provided by SLF4J that lets you attach contextual information to log statements without passing it explicitly to every method. Values put in MDC are automatically included in log output via the pattern configuration.
 
 It's thread-local — each request thread has its own MDC map, so correlation IDs from different requests don't interfere with each other. This is why you must clean up MDC in a `finally` block — in a thread pool, threads are reused and stale MDC values from a previous request would leak into the next one.
+
+---
+
+## Docker
+
+**Q: How would you optimise a Dockerfile for a Java application to ensure fast build times and a small image footprint?**
+
+Five key techniques — all implemented in this project's `Dockerfile`:
+
+**1. Multi-stage build — separate build from runtime**
+
+Use a JDK image to build, then copy only the JAR into a slim JRE image. Don't ship build tools in production:
+```dockerfile
+FROM eclipse-temurin:21-jdk-alpine AS builder  # ~400MB, has compiler
+RUN ./mvnw package -DskipTests
+
+FROM eclipse-temurin:21-jre-alpine              # ~180MB, runtime only
+COPY --from=builder /app/target/*.jar app.jar
+```
+
+**2. Layer caching — copy dependencies before source code**
+
+Docker caches each layer. Copy `pom.xml` first and download dependencies before copying source code. Dependencies only re-download when `pom.xml` changes, not on every code change:
+```dockerfile
+COPY mvnw pom.xml ./
+RUN ./mvnw dependency:go-offline  # cached unless pom.xml changes
+COPY src ./src
+RUN ./mvnw package -DskipTests    # only re-runs when src changes
+```
+
+**3. Use Alpine base images**
+
+`eclipse-temurin:21-jre-alpine` (~180MB) vs `eclipse-temurin:21-jre` (~400MB). Alpine Linux is a minimal OS (~5MB).
+
+**4. Run as non-root user**
+
+Security best practice — never run the app as root inside the container:
+```dockerfile
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+```
+
+**5. Use `.dockerignore`**
+
+Exclude files that don't need to be in the build context — speeds up `docker build`:
+```
+target/
+.git/
+*.md
+```
+
+Without `.dockerignore`, Docker sends the entire project directory to the daemon including `target/` (compiled classes, JARs) which is unnecessary and slow.
+
+---
+
+**Q: What does a Docker image consist of?**
+
+A Docker image is a read-only template made up of stacked layers. Each instruction in the Dockerfile creates a new layer:
+
+```
+Layer 5: USER appuser                    ← thin layer, just metadata
+Layer 4: COPY app.jar                    ← your JAR (~50MB)
+Layer 3: RUN addgroup && adduser         ← thin layer
+Layer 2: WORKDIR /app                    ← thin layer
+Layer 1: eclipse-temurin:21-jre-alpine   ← base OS + JRE (~180MB)
+```
+
+For the `billing-api` image specifically it contains:
+- Alpine Linux — minimal OS (shell, basic utilities, ~5MB)
+- Java 21 JRE — runtime to execute the JAR (no compiler, no Maven)
+- `app.jar` — Spring Boot fat JAR containing your code + all dependencies (Spring, Hibernate, Jackson etc.)
+- A non-root user `appuser`
+- Nothing else — no source code, no Maven, no JDK
+
+The fat JAR is key — Spring Boot's `spring-boot-maven-plugin` packages everything the app needs into one self-contained JAR. That's why you only need to copy one file into the image.
+
+When a container starts from this image it runs:
+```
+java -jar app.jar
+```
+
+> "The image contains the Alpine Linux base OS, the Java 21 JRE, and the Spring Boot fat JAR which includes all application dependencies. We use a multi-stage build so the final image doesn't contain the JDK or Maven — only what's needed to run the application."
+
+**Q: What is the difference between a Docker image and a Docker container?**
+
+| | Image | Container |
+|---|---|---|
+| What it is | Read-only template | Running instance of an image |
+| State | Immutable | Has its own writable layer |
+| Analogy | Class definition | Object instance |
+| Created by | `docker build` | `docker run` |
+| Stored | In Docker image registry | On the host machine while running |
+
+You can run multiple containers from the same image — like creating multiple objects from the same class. Each container gets its own writable layer on top of the shared read-only image layers.
+
+---
+
+**Q: How do you inspect the contents of a Docker image?**
+
+Several commands are available:
+
+```bash
+# 1. Inspect image metadata - layers, env vars, entrypoint, user, ports
+docker inspect billing-api:latest
+
+# 2. View layers and sizes - shows each Dockerfile instruction and its size
+docker history billing-api:latest
+
+# 3. Run a shell inside the image to explore the filesystem
+docker run --rm -it --entrypoint sh billing-api:latest
+# --rm removes the container when you exit
+# -it gives you an interactive terminal
+```
+
+`docker history` output for `billing-api:latest`:
+```
+IMAGE          CREATED BY                                      SIZE
+f2866a373ff8   ENTRYPOINT ["java" "-jar" "app.jar"]            0B
+<missing>      EXPOSE [8080/tcp]                               0B
+<missing>      USER appuser                                    0B
+<missing>      RUN addgroup -S appgroup && adduser...          3.06kB
+<missing>      COPY /app/target/*.jar app.jar                  61.5MB   ← your fat JAR
+<missing>      WORKDIR /app                                    0B
+<missing>      RUN set -eux; ARCH=... (JRE install)            164MB    ← Java 21 JRE
+<missing>      RUN apk add --no-cache (locale/certs)           34.4MB
+<missing>      ADD alpine-minirootfs...tar.gz /               8.44MB   ← Alpine Linux OS
+```
+
+**Exploring the fat JAR contents from inside the container:**
+
+```bash
+# Inside the container shell
+cd /app
+unzip -l app.jar
+```
+
+The JAR contains 252 files in three main sections:
+
+`BOOT-INF/lib/` — all Maven dependencies (Spring, Hibernate, Jackson, Flyway etc.):
+```
+BOOT-INF/lib/spring-boot-4.0.5.jar
+BOOT-INF/lib/spring-web-7.0.6.jar
+BOOT-INF/lib/hibernate-core-7.2.7.Final.jar    ← 14MB
+BOOT-INF/lib/postgresql-42.7.10.jar
+BOOT-INF/lib/flyway-core-11.14.1.jar
+BOOT-INF/lib/HikariCP-7.0.2.jar
+BOOT-INF/lib/tomcat-embed-core-11.0.20.jar
+...
+```
+
+`BOOT-INF/classes/` — your compiled application code:
+```
+BOOT-INF/classes/com/mywork/billing/controller/CustomerController.class
+BOOT-INF/classes/com/mywork/billing/service/CustomerService.class
+BOOT-INF/classes/com/mywork/billing/domain/Customer.class
+BOOT-INF/classes/application.properties
+BOOT-INF/classes/db/migration/V1__create_initial_schema.sql
+```
+
+`org/springframework/boot/loader/` — Spring Boot's JAR launcher that knows how to load nested JARs and bootstrap the application.
+
+Note: `jar` command is not available in the JRE image (it's a JDK tool). Use `unzip -l` instead since a JAR is just a ZIP file.
